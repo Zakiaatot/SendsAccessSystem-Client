@@ -235,10 +235,12 @@ void ConnectToServer()
   WebClient.onEvent(onEventsCallback);
   String path = websocketpath + "?token=" + websockettoken + "&Uid=" + websocketuid;
   WebClient.connect(api, port, path);
-  int count = 0;
+  Serial.println("Connecting to server......");
+  int count=0;
   while(!WebClient.available() && count<=10){
-    Serial.println("Connecting to server......");
+    Serial.print("...");
     delay(500);
     ++count;
   }
+  if(!WebClient.available()) WiFi.disconnect();
 }
