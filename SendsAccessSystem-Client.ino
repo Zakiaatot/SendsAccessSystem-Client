@@ -11,13 +11,16 @@
 #define RST_PIN 4
 #define opendoor 5
 
+// mode define
+#define OPENMODE "H"
+
 MFRC522 rfid(SS_PIN, RST_PIN);
 ESP8266WiFiMulti WifiMulti;
 using namespace websockets;
 WebsocketsClient WebClient;
 
 const char *api = "XXX"; //"10.12.65.228"
-const uint16_t port = 80;       //9002
+const uint16_t port = 80;                   // 9002
 const String verifypath = "/verify";
 const String websocketpath = "/SendsAccessClient";
 const String websocketuid = "XXX";
@@ -25,6 +28,9 @@ const String websockettoken = "XXX";
 
 const int dooropentime = 5000;
 unsigned long starttime = 0;
+// auto regular resetup 2022.12.6
+const int auto_resetup_time = 30 * 1000;
+unsigned long auto_resetup_start_time = 0;
 boolean isdooropen = false;
 
 void setup()
@@ -39,6 +45,7 @@ void loop()
   NfcServer();
   WebServer();
   AutoCloseDoor();
+  AutoResetup();
 }
 
 /*custom function*/
@@ -58,7 +65,7 @@ void PinSetup()
 {
   pinMode(opendoor, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(opendoor, HIGH);
+  Close();
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
@@ -143,7 +150,7 @@ boolean VerifyUser(String UidJson)
 // open door
 void OpenDoor()
 {
-  digitalWrite(opendoor, LOW);
+  Open();
   digitalWrite(LED_BUILTIN, LOW);
   isdooropen = true;
   starttime = millis();
@@ -154,9 +161,21 @@ void AutoCloseDoor()
 {
   if (millis() - starttime >= dooropentime)
   {
-    digitalWrite(opendoor, HIGH);
+    Close();
     digitalWrite(LED_BUILTIN, HIGH);
     isdooropen = false;
+  }
+}
+
+// auto regualr resetup
+void AutoResetup()
+{
+  if (millis() - auto_resetup_start_time >= auto_resetup_time)
+  {
+    Serial.println("Resetup");
+    NfcSetup();
+    WebSetup();
+    auto_resetup_start_time = millis();
   }
 }
 
@@ -219,8 +238,10 @@ void onEventsCallback(WebsocketsEvent event, String data)
 
 void ConnectToWifi()
 {
-  WifiMulti.addAP("HiWiFi_10D32A", "wifi.sends.cc");
-  WifiMulti.addAP("Sends_506", "wifi.sends.cc");
+  const char *passwd = "wifi.sends.cc";
+  WifiMulti.addAP("HiWiFi_10D32A", passwd);
+  WifiMulti.addAP("Sends_506", passwd);
+  WifiMulti.addAP("Sends_507", passwd);
   // WifiMulti.addAP("sends_huawei_wifi", "wifi.sends.cc");
   while (WifiMulti.run() != WL_CONNECTED)
   {
@@ -236,11 +257,37 @@ void ConnectToServer()
   String path = websocketpath + "?token=" + websockettoken + "&Uid=" + websocketuid;
   WebClient.connect(api, port, path);
   Serial.println("Connecting to server......");
-  int count=0;
-  while(!WebClient.available() && count<=10){
+  int count = 0;
+  while (!WebClient.available() && count <= 10)
+  {
     Serial.print("...");
     delay(500);
     ++count;
   }
-  if(!WebClient.available()) WiFi.disconnect();
+  if (!WebClient.available())
+    WiFi.disconnect();
+}
+
+void Close()
+{
+  if (OPENMODE == "H")
+  {
+    digitalWrite(opendoor, LOW);
+  }
+  else
+  {
+    digitalWrite(opendoor, HIGH);
+  }
+}
+
+void Open()
+{
+  if (OPENMODE == "H")
+  {
+    digitalWrite(opendoor, HIGH);
+  }
+  else
+  {
+    digitalWrite(opendoor, LOW);
+  }
 }
